@@ -1,0 +1,10 @@
+---
+import DefaultLayout from "../layout/DefaultLayout.astro";
+import ComponenteEjemplo from "../components/ComponenteEjemplo";
+---
+
+<DefaultLayout>
+	<section class="p-8">
+		<ComponenteEjemplo client:only="react" />
+	</section>
+</DefaultLayout>
