@@ -2,12 +2,23 @@ import { useRef, useState, useEffect } from "react";
 
 
 export default function ComponenteEjemplo() {
-  const audioRef = useRef(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [prevSongIndex, setPrevSongIndex] = useState(0);
+  const [volume, setVolume] = useState(80); // 0-100
+  const [countP3, setCountP3] = useState(0);
+  const [countP4, setCountP4] = useState(0);
+  const [countP5, setCountP5] = useState(0);
+
+  const franchiseByIndex: Record<number, "P3" | "P4" | "P5"> = {
+    0: "P3", // Full Moon Full Life
+    1: "P5", // I Believe
+    2: "P4", // Reach Out To The Truth
+    3: "P5", // Take Over
+  };
 
   const songs = [
     { 
@@ -74,28 +85,43 @@ export default function ComponenteEjemplo() {
   const currentTheme = colorThemes[currentSongIndex];
 
   const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
     }
   };
 
   const nextSong = () => {
-    setCurrentSongIndex((prev) => (prev + 1) % songs.length);
+    const nextIndex = (currentSongIndex + 1) % songs.length;
+    setCurrentSongIndex(nextIndex);
+    const franchise = franchiseByIndex[nextIndex];
+    if (franchise === "P3") setCountP3((c) => c + 1);
+    if (franchise === "P4") setCountP4((c) => c + 1);
+    if (franchise === "P5") setCountP5((c) => c + 1);
     setIsPlaying(true);
   };
 
   const previousSong = () => {
-    setCurrentSongIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    const prevIndex = (currentSongIndex - 1 + songs.length) % songs.length;
+    setCurrentSongIndex(prevIndex);
+    const franchise = franchiseByIndex[prevIndex];
+    if (franchise === "P3") setCountP3((c) => c + 1);
+    if (franchise === "P4") setCountP4((c) => c + 1);
+    if (franchise === "P5") setCountP5((c) => c + 1);
     setIsPlaying(true);
   };
 
-  const selectSong = (index) => {
+  const selectSong = (index: number) => {
     setCurrentSongIndex(index);
+    // Al seleccionar, la canción sonará: suma según la saga
+    const franchise = franchiseByIndex[index];
+    if (franchise === "P3") setCountP3((c) => c + 1);
+    if (franchise === "P4") setCountP4((c) => c + 1);
+    if (franchise === "P5") setCountP5((c) => c + 1);
     setIsPlaying(true);
   };
 
@@ -115,7 +141,7 @@ export default function ComponenteEjemplo() {
     nextSong();
   };
 
-  const handleProgressChange = (e) => {
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
     if (audioRef.current) {
@@ -123,7 +149,15 @@ export default function ComponenteEjemplo() {
     }
   };
 
-  const formatTime = (time) => {
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVol = parseInt(e.target.value, 10);
+    setVolume(newVol);
+    if (audioRef.current) {
+      audioRef.current.volume = Math.max(0, Math.min(1, newVol / 100));
+    }
+  };
+
+  const formatTime = (time: number) => {
     if (!time || isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
@@ -143,6 +177,33 @@ export default function ComponenteEjemplo() {
     }
   }, [isPlaying, currentSongIndex]);
 
+  // Cargar contadores desde localStorage al montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("personaCounts");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { p3?: number; p4?: number; p5?: number };
+        if (typeof parsed.p3 === "number") setCountP3(parsed.p3);
+        if (typeof parsed.p4 === "number") setCountP4(parsed.p4);
+        if (typeof parsed.p5 === "number") setCountP5(parsed.p5);
+      }
+    } catch {}
+  }, []);
+
+  // Guardar contadores cuando cambian
+  useEffect(() => {
+    try {
+      const payload = JSON.stringify({ p3: countP3, p4: countP4, p5: countP5 });
+      localStorage.setItem("personaCounts", payload);
+    } catch {}
+  }, [countP3, countP4, countP5]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = Math.max(0, Math.min(1, volume / 100));
+  }, [volume]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setPrevSongIndex(currentSongIndex);
@@ -154,6 +215,62 @@ export default function ComponenteEjemplo() {
     <div 
       className="flex justify-center items-center min-h-screen p-4 relative overflow-hidden"
     >
+      {/* Gráfico de barras por saga (proporcional) */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-3xl px-6">
+        <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-white/80 text-sm tracking-widest uppercase">Escuchas por Juego</span>
+            <button
+              onClick={() => {
+                setCountP3(0);
+                setCountP4(0);
+                setCountP5(0);
+                try { localStorage.removeItem("personaCounts"); } catch {}
+              }}
+              className="px-3 py-1 text-xs font-semibold rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition-colors"
+            >
+              Reset gráfico
+            </button>
+          </div>
+          {(() => {
+            const total = countP3 + countP4 + countP5;
+            const p3Pct = total ? Math.round((countP3 / total) * 100) : 0;
+            const p4Pct = total ? Math.round((countP4 / total) * 100) : 0;
+            const p5Pct = total ? Math.round((countP5 / total) * 100) : 0;
+            return (
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-cyan-400 font-bold">Persona 3</span>
+                    <span className="text-white/70 text-xs">{p3Pct}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-700" style={{ width: `${p3Pct}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-yellow-400 font-bold">Persona 4</span>
+                    <span className="text-white/70 text-xs">{p4Pct}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-600" style={{ width: `${p4Pct}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-red-500 font-bold">Persona 5</span>
+                    <span className="text-white/70 text-xs">{p5Pct}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-red-500 to-rose-700" style={{ width: `${p5Pct}%` }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
 
       <div 
         className="absolute inset-0 transition-opacity duration-500"
@@ -214,6 +331,21 @@ export default function ComponenteEjemplo() {
             max={duration || 0}
             value={currentTime}
             onChange={handleProgressChange}
+            className={`w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer ${currentTheme.progress} transition-colors duration-500`}
+          />
+        </div>
+
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-slate-300 text-sm">Volumen</span>
+            <span className="text-slate-400 text-xs">{volume}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onChange={handleVolumeChange}
             className={`w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer ${currentTheme.progress} transition-colors duration-500`}
           />
         </div>
